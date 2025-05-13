@@ -15,9 +15,8 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 
 # define directories to instrument directory
 # # each directory must contain a "collection" folder and "plots" folder
-grimm_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/data'
-quant_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/data/quant_pm/site/wbb'
-save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/wbb/QUANT'
+quant_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/data/quant_pm/site/alta'
+save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/alta'
 
 
 ###############################################################################
@@ -309,18 +308,17 @@ opc_bins = pd.DataFrame({
 quant_opc, opc_bins = bin(quant_opc, opc_bins, 'opc')
 
 
-neph_bins = pd.DataFrame({
-    'Bin Number': ['bin0', 'bin1', 'bin2', 'bin3', 'bin4', 'bin5', 'binXX'],
-    'Size (µm)': [0.35, 0.46, 0.66, 1.00, 1.30, 1.70, 2.30]
-})
-quant_neph, neph_bins = bin(quant_neph, neph_bins, 'neph')
+# neph_bins = pd.DataFrame({
+#     'Bin Number': ['bin0', 'bin1', 'bin2', 'bin3', 'bin4', 'bin5', 'binXX'],
+#     'Size (µm)': [0.35, 0.46, 0.66, 1.00, 1.30, 1.70, 2.30]
+# })
+# quant_neph, neph_bins = bin(quant_neph, neph_bins, 'neph')
 
 
 
 # split the combine data set according to day dust was collected
 daily_opc = split(quant_opc)
-
-daily_neph = split(quant_neph)
+#daily_neph = split(quant_neph)
 
 
 
@@ -334,7 +332,7 @@ daily_neph = split(quant_neph)
 process_daily_data(daily_opc, opc_bins, 0, 10000, save_dir, "QUANT_OPC_WBB")
 
 
-process_daily_data(daily_neph, neph_bins, 0, 10000, save_dir, "QUANT_NEPH_WBB")
+#process_daily_data(daily_neph, neph_bins, 0, 10000, save_dir, "QUANT_NEPH_WBB")
 
 
 
