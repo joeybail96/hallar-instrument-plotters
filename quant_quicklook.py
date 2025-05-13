@@ -298,7 +298,7 @@ quant_efficiencies = []
 
 # read all csv data in filepath
 # # can also specify specific, individual files in 2nd input (e.g, "2023-11-24.csv")
-quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2025])
+quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2024, 2025])
 
 # bin quant data
 opc_bins = pd.DataFrame({
@@ -333,7 +333,7 @@ daily_opc = split(quant_opc)
 
 
 # # process and plot dust concentrations
-process_daily_data(daily_opc, opc_bins, 0, 10000, save_dir, "QUANT_OPC_WBB")
+process_daily_data(daily_opc, opc_bins, 0, 10000, save_dir, "QUANT_OPC_Alta")
 
 
 #process_daily_data(daily_neph, neph_bins, 0, 10000, save_dir, "QUANT_NEPH_WBB")
