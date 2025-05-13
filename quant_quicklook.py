@@ -25,7 +25,7 @@ save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/alta'
 
 
 # read quant csv file(s)
-def read_quant(data_dir, file, eff, years, ver='raw'):
+def read_quant(data_dir, eff, years, ver='raw'):
     # get a list of all subdirectories in the data_dir
     subdirectories = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     
@@ -298,7 +298,7 @@ quant_efficiencies = []
 
 # read all csv data in filepath
 # # can also specify specific, individual files in 2nd input (e.g, "2023-11-24.csv")
-quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2024, 2025])
+quant_opc, quant_neph = read_quant(quant_dir, quant_efficiencies, [2024, 2025])
 
 # bin quant data
 opc_bins = pd.DataFrame({
