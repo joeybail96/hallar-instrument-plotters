@@ -25,7 +25,7 @@ save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/alta'
 
 
 # read quant csv file(s)
-def read_quant(data_dir, file, eff, years):
+def read_quant(data_dir, file, eff, years, ver='raw'):
     # get a list of all subdirectories in the data_dir
     subdirectories = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     
@@ -37,22 +37,22 @@ def read_quant(data_dir, file, eff, years):
         # check if the subdirectory label contains a year from the input years
         if any(str(year) in subdirectory for year in years):
             # read every csv file in the subdirectory
-            csv_files = [f for f in os.listdir(os.path.join(data_dir, subdirectory)) if f.endswith('.csv')]
+            csv_files = [f for f in os.listdir(os.path.join(data_dir, subdirectory, ver)) if f.endswith('.csv')]
             for csv_file in csv_files:
                 # read the csv file, keeping the header row
-                df = pd.read_csv(os.path.join(data_dir, subdirectory, csv_file))
+                df = pd.read_csv(os.path.join(data_dir, subdirectory, ver, csv_file))
                 dfs.append(df)
     
     # combine data from all csv files into one dataframe
     combined_df = pd.concat(dfs, axis=0, ignore_index=True)
     
     # return all formatted and combined data
-    return format_quant(combined_df, eff)
+    return format_quant(combined_df, eff, ver)
 
 
 
 # format the raw quant data
-def format_quant(df, eff):
+def format_quant(df, eff, ver):
     
     # check if efficiency was specified for quant
     if eff == []:
@@ -66,23 +66,27 @@ def format_quant(df, eff):
         # Convert 'Time_UTC' to datetime and create 'Time_MST'
         df['Time_UTC'] = pd.to_datetime(df['Time_UTC'])
         df['Time_MST'] = df['Time_UTC'].dt.tz_localize('UTC').dt.tz_convert('MST').dt.tz_localize(None)
+        
 
-        # Define OPC columns and reorder
-        opc_columns = [
-            'Time_UTC', 'Time_MST',  # Time-related columns
-            'opc_bin0', 'opc_bin1', 'opc_bin2', 'opc_bin3', 'opc_bin4', 'opc_bin5', 'opc_bin6',
-            'opc_bin7', 'opc_bin8', 'opc_bin9', 'opc_bin10', 'opc_bin11', 'opc_bin12', 'opc_bin13',
-            'opc_bin14', 'opc_bin15', 'opc_bin16', 'opc_bin17', 'opc_bin18', 'opc_bin19', 'opc_bin20',
-            'opc_bin21', 'opc_bin22', 'opc_bin23', 
-            'opc_pm1', 'opc_pm25', 'opc_pm10'
-        ]
-
-        # Define NEPH columns and reorder
-        neph_columns = [
-            'Time_UTC', 'Time_MST',  # Time-related columns
-            'neph_bin0', 'neph_bin1', 'neph_bin2', 'neph_bin3', 'neph_bin4', 'neph_bin5',
-            'neph_pm1', 'neph_pm25', 'neph_pm10'
-        ]
+        if ver == 'raw':
+            # define opc columns 
+            opc_columns = [
+                'Time_UTC', 'Time_MST',  # Time-related columns
+                'opc_bin0', 'opc_bin1', 'opc_bin2', 'opc_bin3', 'opc_bin4', 'opc_bin5', 'opc_bin6',
+                'opc_bin7', 'opc_bin8', 'opc_bin9', 'opc_bin10', 'opc_bin11', 'opc_bin12', 'opc_bin13',
+                'opc_bin14', 'opc_bin15', 'opc_bin16', 'opc_bin17', 'opc_bin18', 'opc_bin19', 'opc_bin20',
+                'opc_bin21', 'opc_bin22', 'opc_bin23', 
+                'opc_pm1', 'opc_pm25', 'opc_pm10'
+            ]
+    
+            # define neph columns
+            neph_columns = [
+                'Time_UTC', 'Time_MST',  # Time-related columns
+                'neph_bin0', 'neph_bin1', 'neph_bin2', 'neph_bin3', 'neph_bin4', 'neph_bin5',
+                'neph_pm1', 'neph_pm25', 'neph_pm10'
+            ]
+        else:
+            print("VERSION OF RESULTS SET TO FINAL. THIS SECTION OF CODE NOT READY YET.")
 
         # Extract OPC and NEPH DataFrames
         opc_df = df[opc_columns].copy()
@@ -294,7 +298,7 @@ quant_efficiencies = []
 
 # read all csv data in filepath
 # # can also specify specific, individual files in 2nd input (e.g, "2023-11-24.csv")
-quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2023])
+quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2025])
 
 # bin quant data
 opc_bins = pd.DataFrame({
