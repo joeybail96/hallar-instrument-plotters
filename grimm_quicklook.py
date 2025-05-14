@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+ # -*- coding: utf-8 -*-
 
 ###############################################################################
 #%%# prepare workspace
@@ -10,13 +10,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.colors import ListedColormap, BoundaryNorm
+import datetime as dt
+import tempfile
 
 
-
-# define directories to instrument directory
-# # each directory must contain a "collection" folder and "plots" folder
-grimm_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/data'
-save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/wbb/QUANT'
 
 
 ###############################################################################
@@ -24,14 +21,60 @@ save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/wbb/QUANT'
 ###############################################################################
 
 
-# read quant csv file(s)
-def read_quant(data_dir, file, eff, years):
+# 
+def fix_x00_issue(file_path, save_dir, title):
+    
+    # open the csv file as a text file
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+
+    # remove all the null \x00 values for all lines
+    cleaned_lines = [line.replace('\x00', '') for line in lines]
+
+    # save the cleaned content to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, mode='w', newline='') as tmpfile:
+        tmpfile.writelines(cleaned_lines)
+        cleaned_file_path = tmpfile.name
+    
+    # read the cleaned file with pandas
+    df = pd.read_csv(cleaned_file_path, header=None)
+    
+    # remove the temporary file
+    os.remove(cleaned_file_path)
+    
+    
+    raw_time = df.iloc[:,0]
+    timestamps = pd.Series(raw_time)
+    timestamps = pd.to_datetime(timestamps)
+    dates = timestamps.dt.strftime('%Y-%m-%d')   
+    date_str = dates.iloc[1]
+
+    
+    # Create the error message text file
+    error_message = (
+        "Error occurred in this csv file. One of the UTC time signatures contained "
+        "extraneous null values of x00\\x00..."
+    )
+    error_filename = f"{date_str}_{title}_error.txt"
+    error_file_path = os.path.join(save_dir, error_filename)
+    
+    with open(error_file_path, 'w') as error_file:
+        error_file.write(error_message)
+    
+    # return the dataframe with no extraneous null \x00 values
+    return df
+    
+
+# grimm_dir, grimm_efficiencies, save_dir, project_title, [2024, 2025]
+def read_grimm(data_dir, eff, save_dir, title, years):
+    
+    
     # get a list of all subdirectories in the data_dir
     subdirectories = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     
     # initialize an empty list to store dataframes
     dfs = []
-    
+
     # iterate through each subdirectory
     for subdirectory in subdirectories:
         # check if the subdirectory label contains a year from the input years
@@ -40,92 +83,125 @@ def read_quant(data_dir, file, eff, years):
             csv_files = [f for f in os.listdir(os.path.join(data_dir, subdirectory)) if f.endswith('.csv')]
             for csv_file in csv_files:
                 # read the csv file, keeping the header row
-                df = pd.read_csv(os.path.join(data_dir, subdirectory, csv_file))
+                file_path = os.path.join(data_dir, subdirectory, csv_file)
+                df = pd.read_csv(file_path, header=None)
+                
+                has_nan = df.iloc[:, 0].isna().any()
+                if has_nan:    
+                    df = fix_x00_issue(file_path, save_dir, title)
+                
                 dfs.append(df)
     
     # combine data from all csv files into one dataframe
     combined_df = pd.concat(dfs, axis=0, ignore_index=True)
     
-    # return all formatted and combined data
-    return format_quant(combined_df, eff)
+    # return formatted file
+    return format_grimm(combined_df, eff)
 
 
-
-# format the raw quant data
-def format_quant(df, eff):
+# format the raw grimm data
+def format_grimm(df, eff):
     
-    # check if efficiency was specified for quant
-    if eff == []:
-         
-        # Drop unnecessary columns
-        df.drop(columns=['Unnamed: 0', 'timestamp_local'], inplace=True)
+    # grab time (UTC)
+    utc = pd.to_datetime(df.iloc[:,0],format='mixed')
 
-        # Rename 'timestamp' to 'Time_UTC'
-        df.rename(columns={'timestamp': 'Time_UTC'}, inplace=True)
-
-        # Convert 'Time_UTC' to datetime and create 'Time_MST'
-        df['Time_UTC'] = pd.to_datetime(df['Time_UTC'])
-        df['Time_MST'] = df['Time_UTC'].dt.tz_localize('UTC').dt.tz_convert('MST').dt.tz_localize(None)
-
-        # Define OPC columns and reorder
-        opc_columns = [
-            'Time_UTC', 'Time_MST',  # Time-related columns
-            'opc_bin0', 'opc_bin1', 'opc_bin2', 'opc_bin3', 'opc_bin4', 'opc_bin5', 'opc_bin6',
-            'opc_bin7', 'opc_bin8', 'opc_bin9', 'opc_bin10', 'opc_bin11', 'opc_bin12', 'opc_bin13',
-            'opc_bin14', 'opc_bin15', 'opc_bin16', 'opc_bin17', 'opc_bin18', 'opc_bin19', 'opc_bin20',
-            'opc_bin21', 'opc_bin22', 'opc_bin23', 
-            'opc_pm1', 'opc_pm25', 'opc_pm10'
-        ]
-
-        # Define NEPH columns and reorder
-        neph_columns = [
-            'Time_UTC', 'Time_MST',  # Time-related columns
-            'neph_bin0', 'neph_bin1', 'neph_bin2', 'neph_bin3', 'neph_bin4', 'neph_bin5',
-            'neph_pm1', 'neph_pm25', 'neph_pm10'
-        ]
-
-        # Extract OPC and NEPH DataFrames
-        opc_df = df[opc_columns].copy()
-        neph_df = df[neph_columns].copy()
-        
-        # Sort both DataFrames by 'Time_MST' in chronological order
-        opc_df.sort_values(by='Time_MST', inplace=True)
-        neph_df.sort_values(by='Time_MST', inplace=True)
-        
-      
-        # return formatted quant data
-        return opc_df, neph_df
+    # drop time columns from df
+    df = df.iloc[:, 1:]
     
-    else:
-        print("Need to define efficiency for quant")
-        return
+    # trim away smallest and largest bin (inaccurate measurements)
+    df = df.iloc[:, 1:-1]
+    
+    # convert dust concentrations to n/cm3 (originally n/100ml)
+    df = df / 100
+            
+    
+    if eff != []:
+        # adjust dust concentrations based on inlet efficiencies
+        num_columns = df.shape[1]
+        df = df / eff[0:num_columns]
+    
+    # return formatted grimm data
+    return utc, df
 
 
-# bin aerosol data
-def bin(df, bins, instrument):
+# # bin aerosol data
+# def bin(data, bins):
+    
+#     # grab indicies of neighboring elements
+#     x1_indices = np.arange(0, len(bins) - 1, dtype=int)
+#     x2_indices = x1_indices + 1
+    
+#     # calculate mean of neighboring bins
+#     mean_dp = (bins[x2_indices] + bins[x1_indices]) / 2
+    
+#     # convert data array into dataframe
+#     df = pd.DataFrame(data)
+    
+#     # rename columns to be mean particle diameters
+#     df.columns = mean_dp
+
+#     return df
+  
+    
+  
+def bin(df, bins):
     # Calculate the mean diameter for each bin
     bins['Dp'] = (bins['Size (µm)'] + bins['Size (µm)'].shift(-1)) / 2
     bins['dlogDp'] = np.log10(bins['Size (µm)']).shift(-1) - np.log10(bins['Size (µm)'])
     
     # Create a mapping from bin names to mean diameters and dlogDp values
-    bin_mapping = {f'{instrument}_{bin_num}': mean_diameter for bin_num, mean_diameter in zip(bins['Bin Number'], bins['Dp'])}
-    bin_dlogDp_mapping = {f'{instrument}_{bin_num}': dlogDp for bin_num, dlogDp in zip(bins['Bin Number'], bins['dlogDp'])}
+    bin_mapping = {bin_num: mean_diameter for bin_num, mean_diameter in zip(bins['Bin Number'], bins['Dp'])}
+    bin_dlogDp_mapping = {bin_num: dlogDp for bin_num, dlogDp in zip(bins['Bin Number'], bins['dlogDp'])}
     
     # Divide the data in each 'opc_binX' column by the corresponding 'dlogDp' value
     for column in df.columns:
-        if column.startswith(f'{instrument}_bin'):
-            bin_number = column.split('_')[1]  # Extract bin number (e.g., 'opc_bin0' -> '0')
-            
-            if f'{instrument}_{bin_number}' in bin_dlogDp_mapping:
-                # Divide the data in the 'opc_bin' column by the corresponding 'dlogDp' value
-                df[column] = df[column] / bin_dlogDp_mapping[f'{instrument}_{bin_number}']
+
+        if column in bin_dlogDp_mapping:
+            # Divide the data in the 'opc_bin' column by the corresponding 'dlogDp' value
+            df[column] = df[column] / bin_dlogDp_mapping[column]
     
     # Rename the columns in the data DataFrame based on the bin mapping
     df = df.rename(columns=bin_mapping)
     bins = bins.iloc[:-1].reset_index(drop=True)
     
 
-    return df, bins
+    return df, bins    
+  
+
+# normalize bin collections by log differences
+def sizing(data, bins):
+    
+    # grab indicies of neighboring elements
+    x1_indices = np.arange(0, len(bins) - 1, dtype=int)
+    x2_indices = x1_indices + 1
+    
+    # calculate log differences
+    dlogDp = np.log10(bins[x2_indices]) - np.log10(bins[x1_indices])
+    
+    # normalize particle #s by bin size
+    result_df = data.divide(dlogDp, axis ='columns')
+    
+    # return the normalized data
+    return result_df
+ 
+    
+# assemble time and aerosol date
+def combine(date, data):
+    
+    # combine date with data    
+    result_df = pd.concat([date, data], axis=1)
+    
+    # add a column title over the dates
+    result_df.columns = ['Time_UTC'] + list(result_df.columns[1:])
+    
+    # Convert Time_UTC to timezone-aware datetime in UTC
+    result_df['Time_UTC'] = pd.to_datetime(result_df['Time_UTC'], utc=True)
+    
+    # Add Time_MST column (UTC-7, without daylight saving)
+    result_df['Time_MST'] = result_df['Time_UTC'].dt.tz_convert('Etc/GMT+7')
+    
+    # returned combined dataframe
+    return result_df
 
 
 # organize dust data by date collected
@@ -156,9 +232,9 @@ def split(df):
     
 
 # iterate through each date for plotting
-def process_daily_data(daily_quant, bins, min_count, max_count, path, title):
+def process_daily_data(daily_grimm, bins, min_count, max_count, path, title):
     # Iterate through each entry in daily_grimm
-    for date, day_data in daily_quant.items():     
+    for date, day_data in daily_grimm.items():  
         plot_size_dist(day_data, date, bins, min_count, max_count, path, title)
         
 
@@ -256,23 +332,6 @@ def plot_size_dist(day_data, date, bins, min_count, max_count, path, title):
     ax1.set_yticks(y_ticks)
     ax1.set_yticklabels(y_ticks, fontsize=8)
     
-    
-    # Identify PM10 column by searching for 'pm10' in the column name
-    day_data.set_index('Time_MST', inplace=True)
-    pm10_column = next(col for col in day_data.columns if '_pm10' in str(col))
-    pm10_data = day_data[pm10_column]
-    day_data.reset_index(inplace=True)
-
-
-    # Plot PM10 on the second y-axis
-    # ax2 = ax1.twinx()
-    # ax2.plot(range(len(time)), pm10_data, color='tab:red', label='PM10 1min Avg', linestyle='-', marker='o', markersize=4, alpha=1)
-    # ax2.set_ylabel('PM10 (µg/m³)', color='tab:red')
-
-    
-    # ax2.tick_params(axis='y', labelcolor='tab:red')
-    # ax2.set_ylim(-500, 500)  # Starting halfway up
-    # ax2.set_yticks([0, 100, 200, 300, 400, 500])  # PM10 ticks
 
     # Save plot
     year = pd.to_datetime(day_data['Time_MST']).dt.year.iloc[0]
@@ -281,59 +340,83 @@ def plot_size_dist(day_data, date, bins, min_count, max_count, path, title):
     filepath = os.path.join(year_directory, f"{date}_{title}.png")
     plt.savefig(filepath, dpi=400, bbox_inches='tight')
     plt.close()
-    
+
 
 
 
 ###############################################################################
-#%%# process aerosol # concentrations for QUANT
+#%%# process aerosol # concentrations for GRIMM
 ###############################################################################
 
-# specify inlet efficiencies for QUANT at WBB
-quant_efficiencies = []
 
-# read all csv data in filepath
-# # can also specify specific, individual files in 2nd input (e.g, "2023-11-24.csv")
-quant_opc, quant_neph = read_quant(quant_dir, "", quant_efficiencies, [2023])
 
-# bin quant data
-opc_bins = pd.DataFrame({
-    'Bin Number': ['bin0', 'bin1', 'bin2', 'bin3', 'bin4', 'bin5', 'bin6', 'bin7', 'bin8', 
-                   'bin9', 'bin10', 'bin11', 'bin12', 'bin13', 'bin14', 'bin15', 'bin16', 'bin17', 
-                   'bin18', 'bin19', 'bin20', 'bin21', 'bin22', 'bin23', 'binXX'],
-    'Size (µm)': [0.35, 0.46, 0.66, 1.00, 1.30, 1.70, 2.30, 3.00, 4.00, 
-                  5.20, 6.50, 8.00, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 
-                  22.0, 25.0, 28.0, 31.0, 34.0, 37.0, 40.0]
+
+# define directories to instrument directory
+# # each directory must contain a "collection" folder and "plots" folder
+grimm_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/data/site/wbb'
+save_dir = '/uufs/chpc.utah.edu/common/home/hallar-group2/plots/site/wbb/GRIMM/'
+
+project_title = 'GRIMM_(WBB)'
+
+
+# # specify inlet efficiencies for GRIMM @ WBB
+grimm_efficiencies = [0.9984480257, 0.9981661124, 0.9979658865, 0.9974219954, 0.9968158814,
+                0.9961473774, 0.9954165081, 0.9941177784, 0.992851444, 0.991873087,
+                0.9897330241, 0.9847273933, 0.9754386725, 0.9640684329, 0.9457855443,
+                0.9181626064, 0.8856016482, 0.8485313359, 0.8074187886, 0.7150943161,
+                0.5595642092, 0.451205686, 0.3445254765, 0.1974961192, 0.0234574173,
+                0, 0, 0, 0, 0, 0, 0]
+
+# read grimm csv data for current day
+grimm_utc, grimm = read_grimm(grimm_dir, grimm_efficiencies, save_dir, project_title, [2024, 2025])
+
+# bin grimm data
+# grimm_bins = np.array([0.25, 0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.58, 0.65,
+#               0.70, 0.80, 1.00, 1.30, 1.60, 2.00, 2.50, 3.00, 3.50, 4.00, 5.00,
+#               6.50, 7.50, 8.50, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0, 32.0])
+# grimm = bin(grimm, grimm_bins)
+
+
+
+# grimm_bins = pd.DataFrame({
+#     'Bin Number': [f'bin{i}' for i in range(31)],
+#     'Size (µm)': [0.25, 0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.58, 0.65,
+#                   0.70, 0.80, 1.00, 1.30, 1.60, 2.00, 2.50, 3.00, 3.50, 4.00, 5.00,
+#                   6.50, 7.50, 8.50, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0, 32.0]
+# })
+
+grimm_bins = pd.DataFrame({
+    'Bin Number': list(range(2, 32)) + ['XX'],
+    'Size (µm)': [0.25, 0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.58, 0.65,
+                  0.70, 0.80, 1.00, 1.30, 1.60, 2.00, 2.50, 3.00, 3.50, 4.00, 5.00,
+                  6.50, 7.50, 8.50, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0, 32.0]
 })
-quant_opc, opc_bins = bin(quant_opc, opc_bins, 'opc')
+
+grimm, grimm_bins = bin(grimm, grimm_bins)
 
 
-neph_bins = pd.DataFrame({
-    'Bin Number': ['bin0', 'bin1', 'bin2', 'bin3', 'bin4', 'bin5', 'binXX'],
-    'Size (µm)': [0.35, 0.46, 0.66, 1.00, 1.30, 1.70, 2.30]
-})
-quant_neph, neph_bins = bin(quant_neph, neph_bins, 'neph')
+# normalize bins by particle size and bin size
+#grimm = sizing(grimm, grimm_bins)
 
+# combine all csv files into one
+grimm = combine(grimm_utc, grimm)
 
-
-# split the combine data set according to day dust was collected
-daily_opc = split(quant_opc)
-
-daily_neph = split(quant_neph)
-
-
+daily_grimm = split(grimm)
 
 
 ###############################################################################
-#%%# plot aerosol # concentrations for QUANT
+#%%# plot aerosol # concentrations for GRIMM & QUANT
 ###############################################################################
 
+# process and plot dust concentrations
+#plot_contour(grimm, 0, 60000, save_dir, project_title)
+process_daily_data(daily_grimm, grimm_bins, 0, 60000, save_dir, project_title)
 
-# # process and plot dust concentrations
-process_daily_data(daily_opc, opc_bins, 0, 10000, save_dir, "QUANT_OPC_WBB")
 
 
-process_daily_data(daily_neph, neph_bins, 0, 10000, save_dir, "QUANT_NEPH_WBB")
+
+
+
 
 
 
