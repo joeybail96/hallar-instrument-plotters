@@ -123,25 +123,7 @@ def format_grimm(df, eff):
     # return formatted grimm data
     return utc, df
 
-
-# # bin aerosol data
-# def bin(data, bins):
-    
-#     # grab indicies of neighboring elements
-#     x1_indices = np.arange(0, len(bins) - 1, dtype=int)
-#     x2_indices = x1_indices + 1
-    
-#     # calculate mean of neighboring bins
-#     mean_dp = (bins[x2_indices] + bins[x1_indices]) / 2
-    
-#     # convert data array into dataframe
-#     df = pd.DataFrame(data)
-    
-#     # rename columns to be mean particle diameters
-#     df.columns = mean_dp
-
-#     return df
-  
+ 
     
   
 def bin(df, bins):
@@ -370,20 +352,6 @@ grimm_efficiencies = [0.9984480257, 0.9981661124, 0.9979658865, 0.9974219954, 0.
 # read grimm csv data for current day
 grimm_utc, grimm = read_grimm(grimm_dir, grimm_efficiencies, save_dir, project_title, [2024, 2025])
 
-# bin grimm data
-# grimm_bins = np.array([0.25, 0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.58, 0.65,
-#               0.70, 0.80, 1.00, 1.30, 1.60, 2.00, 2.50, 3.00, 3.50, 4.00, 5.00,
-#               6.50, 7.50, 8.50, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0, 32.0])
-# grimm = bin(grimm, grimm_bins)
-
-
-
-# grimm_bins = pd.DataFrame({
-#     'Bin Number': [f'bin{i}' for i in range(31)],
-#     'Size (µm)': [0.25, 0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.58, 0.65,
-#                   0.70, 0.80, 1.00, 1.30, 1.60, 2.00, 2.50, 3.00, 3.50, 4.00, 5.00,
-#                   6.50, 7.50, 8.50, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0, 32.0]
-# })
 
 grimm_bins = pd.DataFrame({
     'Bin Number': list(range(2, 32)) + ['XX'],
@@ -394,9 +362,6 @@ grimm_bins = pd.DataFrame({
 
 grimm, grimm_bins = bin(grimm, grimm_bins)
 
-
-# normalize bins by particle size and bin size
-#grimm = sizing(grimm, grimm_bins)
 
 # combine all csv files into one
 grimm = combine(grimm_utc, grimm)
